@@ -1,4 +1,9 @@
-// C++ program to solve Traveling Salesman Porblem 
+/*************************TIME LIMIT FUNCTIONALITY***********************************/
+/*Used for time limit for programming competition */
+#define TIMED_TEST  //Comment this line out if unlimited time limit is desired
+/********************************************************************************/
+
+// C++ program to solve TSP
 #include <iostream>
 #include <fstream>
 #include <stdio.h>
@@ -7,85 +12,28 @@
 #include<time.h>
 #include<math.h>
 #include<limits.h>
+#include <chrono>
+#include <climits>
+#include <cmath>
+#include <vector>
+
 using namespace std;
+using std::cout;
+using std::endl;
+using std::string;
+using std::ofstream;
+using std::ifstream;
+using std::vector;
+using std::flush;
+
+#define TIME_LIMIT 300  //Time limit for programming competition.
+#define NUMBER_CHECKS 35  //Only check  NUMBER_CHECKS  vertices before optimizing.
+
+
+typedef std::chrono::high_resolution_clock hr_clock;
 const int MAX_ARRAY_SIZE = 16000;
-//used for seths xcode environment dont use for putty
-//const string path = "/Users/westonse/Library/Autosave Information/Project3/Project3/";
 
-
-
-
-// Number of vertices in the graph
-//#define V 15112
-
-// A utility function to find the vertex with minimum key value, from
-// the set of vertices not yet included in MST
-int minKey(int key[], bool mstSet[], int V)
-{
-    // Initialize min value
-    int min = INT_MAX;
-    int min_index = -1;
-    
-    for (int v = 0; v < V; v++)
-        if (mstSet[v] == false && key[v] < min)
-            min = key[v], min_index = v;
-    
-    return min_index;
-}
-
-// A utility function to print the constructed MST stored in parent[]
-void printMST(int parent[], int n, int **graph)
-{
-    printf("Edge   Weight\n");
-    for (int i = 1; i < n; i++)
-    {
-        printf("%d - %d    %d \n", parent[i], i, graph[i][parent[i]]);
-    }
-}
-
-// Function to construct and print MST for a graph represented using adjacency
-// matrix representation
-void primMST(int **graph, int V)
-{
-    int parent[V]; // Array to store constructed MST
-    int key[V];   // Key values used to pick minimum weight edge in cut
-    bool mstSet[V];  // To represent set of vertices not yet included in MST
-    
-    // Initialize all keys as INFINITE
-    for (int i = 0; i < V; i++)
-        key[i] = INT_MAX, mstSet[i] = false;
-    
-    // Always include first 1st vertex in MST.
-    key[0] = 0;     // Make key 0 so that this vertex is picked as first vertex
-    parent[0] = -1; // First node is always root of MST
-    
-    // The MST will have V vertices
-    for (int count = 0; count < V-1; count++)
-    {
-        // Pick the minimum key vertex from the set of vertices
-        // not yet included in MST
-        int u = minKey(key, mstSet, V);
-        
-        // Add the picked vertex to the MST Set
-        mstSet[u] = true;
-        
-        // Update key value and parent index of the adjacent vertices of
-        // the picked vertex. Consider only those vertices which are not yet
-        // included in MST
-        for (int v = 0; v < V; v++)
-            
-            // graph[u][v] is non zero only for adjacent vertices of m
-            // mstSet[v] is false for vertices not yet included in MST
-            // Update the key only if graph[u][v] is smaller than key[v]
-            if (graph[u][v] && mstSet[v] == false && graph[u][v] <  key[v])
-                parent[v]  = u, key[v] = graph[u][v];
-    }
-    
-    // print the constructed MST
-    printMST(parent, V, graph);
-}
-
-//calculates distance between two cities given x/y cooridinates
+/*calculates distance between two cities given x/y cooridinates*/
 int calcDistance(int city1, int city2, int* citiesXaxis, int* citiesYaxis)
 {
     double distance = 0;
@@ -99,60 +47,199 @@ int calcDistance(int city1, int city2, int* citiesXaxis, int* citiesYaxis)
 }
 
 
-//PRINT FUNCTION FOR RESULTS
-/*void printResults(int distance, int tour[MAX_ARRAY_SIZE], string filename)
-{
-    //std::string filename2 = path + "changeResults.txt";
-    //string filename2 = "./changeResults.txt";
-    string filename2 = path + "testchange.txt";
-    ofstream myfile2;
-    //open new file if first time making change
-    if(count>1)
-    {
-        myfile2.open (filename2.c_str(), ios::app);
-        myfile2 << "\n";
+/*Checks for a first path using nearest neighbor approach. Returns best
+ *path with bestSolution variable.  Stops if time limit is reached. */
+bool firstPath(int **G, int numCities, int *&bestSolution, hr_clock::time_point begin){
+    bool *alreadyVisited = new bool [numCities];  //Tracks vertices already visited
+    bool timeOut = false;  //If time limit is reached.
+    int nextV = 0; //next vertex to add.
+    int minimum = 0; //minimum distance between two vertices
+    int skip;  //# of verties to skip between start and end
+    bestSolution = new int[numCities+1];  //Stores best path found
+    bestSolution[0] = INT_MAX;  //Init to infinity
+    int *temp = new int [numCities+1];  //Temp variable for possible better path
+    
+#ifdef TIMED_TEST
+    hr_clock::time_point done;  //Time variables
+    std::chrono::duration<long double> timeElapsed;  //Total time elapsed
+#endif
+    
+    //Determines how many vertices should be checked.
+    //For larger city sets only every 'NUMBER_CHECKS' vertices will be checked.
+    if (numCities < 250) { skip = 1; }
+    else { skip = numCities / NUMBER_CHECKS; }
+    //Checks every 'skip'th vertex for nearest neighbor cycle.
+    for (int i = 0; i < numCities && !timeOut; i += skip){
+        //Reset variables for each vertex being examined.
+        for (int j = 0; j < numCities; j++) { alreadyVisited[j] = 0; }
+        alreadyVisited[i] = 1;
+        temp[0] = 0;
+        temp[1] = i;
+        
+        //Go through all cities
+        for (int j = 2; j < numCities + 1 && !timeOut; j++){
+            nextV = -1;
+            minimum = INT_MAX;
+            //Find nearest neighbor
+            for (int k = 0; k < numCities; k++){
+                if (!alreadyVisited[k] && G[temp[j-1]][k] < minimum) {
+                    nextV = k;
+                    minimum = G[temp[j-1]][k];
+                }
+            }
+            //Add nearest neighbor
+            temp[j] = nextV;
+            temp[0] += minimum;
+            alreadyVisited[nextV] = 1;
+            
+            //Checks if time limit is up
+#ifdef TIMED_TEST
+            done = hr_clock::now();
+            timeElapsed = (std::chrono::duration_cast<std::chrono::microseconds> (done - begin));
+            if (timeElapsed.count() > TIME_LIMIT) {
+                cout << "Time Limit Reached ("  << TIME_LIMIT << " seconds).\n";
+                timeOut = true; }
+#endif
+        }
+        //while time remains
+        if (!timeOut) {
+            //Add distance
+            temp[0] += G[nextV][i];
+            
+            //If tour found is best tour so far, save it.
+            if (temp[0] < bestSolution[0]){
+                for (int j = 0; j < numCities + 1; j++) { bestSolution[j] = temp[j]; }
+            }
+        }
     }
-    //else append
-    else
-    {
-        myfile2.open (filename2.c_str());
+    
+    delete [] alreadyVisited;
+    delete [] temp;
+    
+    return timeOut;
+}
+
+/*Run a 2-opt on the best 'NUMBER_CHEKCS' path found. Runs until
+ *either no optimizations are found, or time runs out*/
+void Optimize(int **G, int numCities, int *&bestPath, hr_clock::time_point begin){
+    int betterSolution = 0;
+    int check = 0;
+    int swap1 = 0;
+    int swap2 = 0;
+    int turn = 0;
+    int *temp = NULL;
+    bool improvementFound = true;
+    
+#ifdef TIMED_TEST
+    hr_clock::time_point done;  //Start and finish times.
+    std::chrono::duration<long double> timeElapsed;  //Variable to hold diff in start & finish.
+#endif
+    
+    while (improvementFound){
+        improvementFound = false;  //Assume no improvement found.
+        betterSolution = 0; //best improvement possible.
+        for (int i = 0; i < (numCities - 2); i++) {  //For every vertex in path
+            for (int j = i + 2; j < numCities - 1; j++) {  //Check every neihboring vertex.
+                //ID any crossing paths
+                check = ((G[bestPath[i + 1]][bestPath[i + 2]] + G[bestPath[j + 1]][bestPath[j + 2]]) -
+                         (G[bestPath[i + 1]][bestPath[j + 1]] + G[bestPath[i + 2]][bestPath[j + 2]]));
+                if (check > betterSolution) {  //Get best path
+                    betterSolution = check;
+                    swap1 = i+1;
+                    swap2 = j+1;
+                    improvementFound = true;  //Run again.
+                }
+            }
+        }
+        
+        //If a positive swap is found make swap.
+        if (improvementFound) {
+            turn = swap2 - swap1;  //Get length of subarray
+            temp = new int[turn];
+            for (int i = 0; i < turn; i++){  //Sort in reverse order
+                temp[i] = bestPath[swap2];
+                swap2--;
+            }
+            for (int i = 0; i < turn; i++){  //Insert reversed subarray into bestSolution
+                bestPath[swap1 + 1] = temp[i];
+                swap1++;
+            }
+            bestPath[0] -= betterSolution;  //Subtract the distance of the improvement.
+            delete[] temp;
+        }
+        
+    
+#ifdef TIMED_TEST
+        done = hr_clock::now();
+        timeElapsed = (std::chrono::duration_cast<std::chrono::microseconds> (done - begin));
+        if (timeElapsed.count() > TIME_LIMIT) {  //if time limit reached return
+            cout << "Time Limit Reached (" << TIME_LIMIT << " seconds).\n";
+            return; }
+#endif
     }
-}*/
+    
+    cout << "Done.\n\n";
+    
+#ifdef TIMED_TEST
+    done = hr_clock::now();
+    timeElapsed = (std::chrono::duration_cast<std::chrono::microseconds> (done - begin));
+    cout << "Completed in " << timeElapsed.count() << " seconds.\n"; //print time elapsed
+#endif
+}
 
 
-// Driver program to test above function
+/*Writes final result to 'input_file.tour' for evaluation.*/
+void printResult(char *argv[], int *bestSolution, int numCities){
+    string fileIn = argv[1];
+    string fileName = "./" + fileIn;
+    
+    cout << "\nDone processing " << fileName << " for <1.25*OPT Solution\n\n";
+    
+    fileName.append(".tour");
+    ofstream outputStream;
+    outputStream.open(fileName);
+    
+    //Prints total distance, followed by list of vertices in order.
+    if (outputStream.is_open()){
+        for (int i = 0; i < numCities + 1; i++){ outputStream << bestSolution[i] << endl; }
+        outputStream.close();
+    }
+    else{
+        cout << "Unable to write to " << fileName << endl << endl;
+    }
+    
+    cout << "TSP results written to " << fileName << "\n\n";
+}
+
+
+
+
 int main(int argc, char** argv)
 {
+    hr_clock::time_point timer;
+    timer = hr_clock::now();  //start timer.
+    cout << "Beginning Timer\n\n";
+    bool timeOut = false;
+    int* Solution = NULL;  //Array to house "best" result.
+    
     //line of text that holds each array
     string line;
     //keeps track of number of cities
     int numCities = 0;
     //holds city names (numbers)
-    int cityNames[MAX_ARRAY_SIZE] = {0};
-    //holds city x/y coordinates
+    int cityNames[MAX_ARRAY_SIZE] = {0};  //holds city x/y coordinates
     int cityX[MAX_ARRAY_SIZE] = {0};
     int cityY[MAX_ARRAY_SIZE] = {0};
-    //solution arrays
-    //int TSPDistance = 0;
-    //int TSPTour[MAX_ARRAY_SIZE] = {0};
-    //adjacency matrix
-    //int AdjacencyMatrix[16000][16000] = {0};
-    //int** AdjacencyMatrix = new int[16000][16000];
-    //Create double pointer
-    int **AdjacenyMatrix;
+    int distance = 0;  //holds distance between two points to populate graph
+    int **G;      //complete graph representing distances between cities
     //Assign first dimension
-    AdjacenyMatrix = new int*[MAX_ARRAY_SIZE];
+    G = new int*[MAX_ARRAY_SIZE];
     //Assign second dimension
     for(int i = 0; i < MAX_ARRAY_SIZE; i++)
     {
-        AdjacenyMatrix[i] = new int[MAX_ARRAY_SIZE];
+        G[i] = new int[MAX_ARRAY_SIZE];
     }
-    //holds distance between two points to populate adjacency matrix
-    int distance = 0;
-    //used for debugging
-    //int count = 0;
-    //used for seths xcode environment
-  
+    //open file (user inputs file name from command line)
     string fileIn = argv[1];
     string filename = "./" + fileIn;
     ifstream myfile(filename.c_str());
@@ -189,33 +276,28 @@ int main(int argc, char** argv)
     //close the file
     myfile.close();
     
-    //increment number of cities to reflect actual number of cities (originally used for indexing)
-    //numCities++;
-
-    
-    /*CALCULATE DISTANCES AND CREATE ADJACENCY MATRIX*/
+    /*CALCULATE DISTANCES AND CREATE GRAPH*/
     for(int i = 0; i<numCities; i++)
     {
         for(int j=i; j<numCities; j++)
         {
             distance = calcDistance(j,i,cityX,cityY);   //calculate distance and populate adjacency matrix
-            AdjacenyMatrix[i][j] = distance;
-            AdjacenyMatrix[j][i] = distance;
+            G[i][j] = distance;
+            G[j][i] = distance;
             
         }
     }
-
     
-    /*IMPLEMENT TSP ALGORITHM HERE*/
-    primMST(AdjacenyMatrix, numCities);
+    cout << "Distances Calculated, begin TSP algorithm...\n\n";
+    /*TSP IMPLEMENTATION*/
+    timeOut = firstPath(G, numCities, Solution, timer);  //Calculates path.
+    cout << "Optimizing...\n\n";
+    if (!timeOut) { Optimize(G, numCities, Solution, timer); } //Optimize path until time limit reached
+    printResult(argv, Solution, numCities);  //output to file.
     
-    //print TSP algorithm results to output file
-    //printResults(TSPDistance,TSPTour,filename);
-    
-    
-    //cout << count;
     return 0;
     
     
 }
+
     
