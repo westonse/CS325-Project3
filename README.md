@@ -1,5 +1,11 @@
 # CS325-Project 3 - Traveling Salesman Problem 
 
-Compile: make 
+-Use make to compile  
 
-Run: tsp [input_file]
+-Program name: tsp 
+
+-Input: tsp_example_*.txt
+
+-Output: tsp_example_*.txt.tour
+
+-Example Usage: tsp tsp_example_1.txt 
