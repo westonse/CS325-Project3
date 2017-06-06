@@ -26,7 +26,7 @@ using std::ifstream;
 using std::vector;
 using std::flush;
 
-#define TIME_LIMIT 300  //Time limit for programming competition.
+#define TIME_LIMIT 180  //Time limit for programming competition.
 #define NUMBER_CHECKS 35  //Only check  NUMBER_CHECKS  vertices before optimizing.
 
 
